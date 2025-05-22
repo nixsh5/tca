@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 import 'xterm/css/xterm.css';
 
 const fileInputRef = React.createRef();
-const backendUrl = process.env.REACT_APP_BACKEND_URL; // Use env variable for backend URL
+const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://tca-production-2b84.up.railway.app';
 
 const Terminal = () => {
     const terminalRef = useRef(null);
@@ -37,7 +37,10 @@ const Terminal = () => {
             method: 'POST',
             body: formData
         })
-            .then(res => res.json())
+            .then(async res => {
+                if (!res.ok) throw new Error('Upload failed');
+                return res.json();
+            })
             .then(data => {
                 if (data.url) {
                     if (state.current.inDM) {
@@ -144,7 +147,15 @@ const Terminal = () => {
                             },
                             body: JSON.stringify({ username, password }),
                         })
-                            .then(res => res.json().then(data => ({ status: res.status, body: data })))
+                            .then(async res => {
+                                let body = null;
+                                try {
+                                    body = await res.json();
+                                } catch (e) {
+                                    body = {};
+                                }
+                                return { status: res.status, body };
+                            })
                             .then(({ status, body }) => {
                                 if (status === 200 && body.token) {
                                     state.current.loggedIn = true;
@@ -171,7 +182,10 @@ const Terminal = () => {
                 case '/listrooms':
                     isAsyncCommand = true;
                     fetch(`${backendUrl}/api/rooms`)
-                        .then(res => res.json())
+                        .then(async res => {
+                            if (!res.ok) throw new Error('Failed to fetch rooms');
+                            return res.json();
+                        })
                         .then(rooms => {
                             xtermRef.current.write('Available rooms: ' + rooms.join(', ') + '\r\n');
                             writePrompt();
