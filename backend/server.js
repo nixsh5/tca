@@ -13,20 +13,6 @@ const Message = require('./models/Message');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' }); // Temporary local storage
-const jwt = require('jsonwebtoken');
-
-io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-        return next(new Error('Authentication error'));
-    }
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-        if (err) return next(new Error('Authentication error'));
-        socket.user = decoded.user; // Attach user info to socket
-        next();
-    });
-});
-
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -129,6 +115,19 @@ const io = new Server(server, {
         origin: '*',
         methods: ['GET', 'POST']
     }
+});
+
+// --- JWT Middleware: Now correctly placed after io is initialized ---
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error('Authentication error'));
+    }
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) return next(new Error('Authentication error'));
+        socket.user = decoded.user; // Attach user info to socket
+        next();
+    });
 });
 
 // --- Socket.io connection handler ---
