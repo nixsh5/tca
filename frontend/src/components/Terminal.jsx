@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 import 'xterm/css/xterm.css';
 
 const fileInputRef = React.createRef();
-const backendUrl = 'http://tca-production-2b84.up.railway.app'; // <-- HARDCODED BACKEND URL
+const backendUrl = 'https://tca-production-2b84.up.railway.app'; // <-- HARDCODED BACKEND URL
 
 const Terminal = () => {
     const terminalRef = useRef(null);
