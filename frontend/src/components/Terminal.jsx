@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 import 'xterm/css/xterm.css';
 
 const fileInputRef = React.createRef();
-const socket = io('http://localhost:5000', {
+const socket = io('http://tca-production-2b84.up.railway.app', {
     auth: { token: userJwt }
 });
 
@@ -36,7 +36,7 @@ const Terminal = () => {
         const formData = new FormData();
         formData.append('image', file);
 
-        fetch('http://localhost:5000/api/upload', {
+        fetch('http://tca-production-2b84.up.railway.app/api/upload', {
             method: 'POST',
             body: formData
         })
@@ -264,7 +264,7 @@ const Terminal = () => {
                     } else {
                         const username = args[0];
                         const password = args[1];
-                        fetch('http://localhost:5000/api/auth/login', {
+                        fetch('http://tca-production-2b84.up.railway.app/api/auth/login', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -292,7 +292,7 @@ const Terminal = () => {
                     break;
                 case '/listrooms':
                     isAsyncCommand = true;
-                    fetch('http://localhost:5000/api/rooms')
+                    fetch('http://tca-production-2b84.up.railway.app/api/rooms')
                         .then(res => res.json())
                         .then(rooms => {
                             xtermRef.current.write('Available rooms: ' + rooms.join(', ') + '\r\n');
