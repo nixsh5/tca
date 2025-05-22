@@ -5,15 +5,13 @@ import { io } from 'socket.io-client';
 import 'xterm/css/xterm.css';
 
 const fileInputRef = React.createRef();
-const socket = io('http://tca-production-2b84.up.railway.app', {
-    auth: { token: userJwt }
-});
-
+const backendUrl = process.env.REACT_APP_BACKEND_URL; // Use env variable for backend URL
 
 const Terminal = () => {
     const terminalRef = useRef(null);
     const xtermRef = useRef(null);
     const fitAddonRef = useRef(null);
+    const socketRef = useRef(null);
 
     const state = useRef({
         loggedIn: false,
@@ -24,7 +22,6 @@ const Terminal = () => {
         token: null,
     });
 
-    // Helper: Detect if a string is an image URL
     function isImageUrl(url) {
         return /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
     }
@@ -36,23 +33,22 @@ const Terminal = () => {
         const formData = new FormData();
         formData.append('image', file);
 
-        fetch('http://tca-production-2b84.up.railway.app/api/upload', {
+        fetch(`${backendUrl}/api/upload`, {
             method: 'POST',
             body: formData
         })
             .then(res => res.json())
             .then(data => {
                 if (data.url) {
-                    // Send image URL as a message
                     if (state.current.inDM) {
-                        socket.emit('dm', {
+                        socketRef.current.emit('dm', {
                             to: state.current.dmUser,
                             from: state.current.username,
                             msg: data.url
                         });
                         xtermRef.current.write(`[DM to ${state.current.dmUser}]: [Image] ${data.url}\r\n`);
                     } else if (state.current.currentRoom) {
-                        socket.emit('room-message', {
+                        socketRef.current.emit('room-message', {
                             room: state.current.currentRoom,
                             user: state.current.username,
                             msg: data.url
@@ -110,129 +106,6 @@ const Terminal = () => {
 
         writePrompt();
 
-        xtermRef.current.onKey(({ key, domEvent }) => {
-            if (domEvent.key === 'Enter') {
-                const promptText = getPrompt();
-                const totalLength = promptText.length + inputBuffer.length;
-                xtermRef.current.write('\r' + ' '.repeat(totalLength) + '\r');
-
-                const trimmedInput = inputBuffer.trim();
-                inputBuffer = '';
-
-                if (trimmedInput.length > 0) {
-                    if (trimmedInput.startsWith('/')) {
-                        handleCommand(trimmedInput);
-                    } else {
-                        handleMessage(trimmedInput);
-                        if (state.current.inDM) {
-                            socket.emit('dm', {
-                                to: state.current.dmUser,
-                                msg: trimmedInput,
-                                from: state.current.username
-                            });
-                        } else if (state.current.currentRoom) {
-                            socket.emit('room-message', {
-                                room: state.current.currentRoom,
-                                msg: trimmedInput,
-                                user: state.current.username
-                            });
-                        }
-                        writePrompt();
-                    }
-                } else {
-                    writePrompt();
-                }
-            } else if (domEvent.key === 'Backspace') {
-                if (inputBuffer.length > 0) {
-                    inputBuffer = inputBuffer.slice(0, -1);
-                    xtermRef.current.write('\b \b');
-                }
-            } else if (
-                domEvent.key.length === 1 &&
-                !domEvent.ctrlKey &&
-                !domEvent.metaKey
-            ) {
-                inputBuffer += key;
-                xtermRef.current.write(key);
-            }
-        });
-
-        // Room messages
-        socket.on('room-message', (data) => {
-            if (data.user !== state.current.username) {
-                if (isImageUrl(data.msg)) {
-                    xtermRef.current.write(`\r\n[${data.room}] ${data.user}: [Image] ${data.msg}\r\n`);
-                } else {
-                    xtermRef.current.write(`\r\n[${data.room}] ${data.user}: ${data.msg}\r\n`);
-                }
-                writePrompt();
-            }
-        });
-
-        // Direct messages
-        socket.on('dm', (data) => {
-            if (data.to === state.current.username) {
-                if (isImageUrl(data.msg)) {
-                    xtermRef.current.write(`\r\n[DM from ${data.from}]: [Image] ${data.msg}\r\n`);
-                } else {
-                    xtermRef.current.write(`\r\n[DM from ${data.from}]: ${data.msg}\r\n`);
-                }
-                writePrompt();
-            }
-        });
-
-        // Room join events
-        socket.on('join-room-success', ({ room }) => {
-            state.current.currentRoom = room;
-            state.current.inDM = false;
-            state.current.dmUser = '';
-            xtermRef.current.write(`Joined room: ${room}\r\n`);
-            socket.emit('get-users', { room });
-            writePrompt();
-        });
-        socket.on('join-room-error', ({ msg }) => {
-            xtermRef.current.write(`Join room failed: ${msg}\r\n`);
-            writePrompt();
-        });
-
-        // Users list
-        socket.on('users-list', (users) => {
-            xtermRef.current.write(`Users in room: ${users.join(', ')}\r\n`);
-            writePrompt();
-        });
-
-        // Real-time user list updates
-        socket.on('room-users', (users) => {
-            xtermRef.current.write(`\r\n[Updated] Users in room: ${users.join(', ')}\r\n`);
-            writePrompt();
-        });
-
-        // Room history
-        socket.on('room-history', (messages) => {
-            messages.forEach(msg => {
-                if (isImageUrl(msg.text)) {
-                    xtermRef.current.write(`[${msg.room}] ${msg.from}: [Image] ${msg.text}\r\n`);
-                } else {
-                    xtermRef.current.write(`[${msg.room}] ${msg.from}: ${msg.text}\r\n`);
-                }
-            });
-            writePrompt();
-        });
-
-        // DM history
-        socket.on('dm-history', (messages) => {
-            messages.forEach(msg => {
-                const direction = msg.from === state.current.username ? 'to' : 'from';
-                const other = direction === 'to' ? msg.to : msg.from;
-                if (isImageUrl(msg.text)) {
-                    xtermRef.current.write(`[DM ${direction} ${other}]: [Image] ${msg.text}\r\n`);
-                } else {
-                    xtermRef.current.write(`[DM ${direction} ${other}]: ${msg.text}\r\n`);
-                }
-            });
-            writePrompt();
-        });
-
         function handleCommand(cmd) {
             const [command, ...args] = cmd.split(' ');
             let isAsyncCommand = false;
@@ -264,7 +137,7 @@ const Terminal = () => {
                     } else {
                         const username = args[0];
                         const password = args[1];
-                        fetch('http://tca-production-2b84.up.railway.app/api/auth/login', {
+                        fetch(`${backendUrl}/api/auth/login`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -278,6 +151,11 @@ const Terminal = () => {
                                     state.current.username = body.user.username;
                                     state.current.token = body.token;
                                     xtermRef.current.write(`Logged in as ${body.user.username}\r\n`);
+                                    // Create socket connection with JWT
+                                    socketRef.current = io(backendUrl, {
+                                        auth: { token: body.token }
+                                    });
+                                    setupSocketListeners();
                                 } else {
                                     xtermRef.current.write(`Login failed: ${body.msg || 'Invalid credentials'}\r\n`);
                                 }
@@ -292,7 +170,7 @@ const Terminal = () => {
                     break;
                 case '/listrooms':
                     isAsyncCommand = true;
-                    fetch('http://tca-production-2b84.up.railway.app/api/rooms')
+                    fetch(`${backendUrl}/api/rooms`)
                         .then(res => res.json())
                         .then(rooms => {
                             xtermRef.current.write('Available rooms: ' + rooms.join(', ') + '\r\n');
@@ -309,14 +187,14 @@ const Terminal = () => {
                     } else if (args.length < 1) {
                         xtermRef.current.write('Usage: /join <room>\r\n');
                     } else {
-                        socket.emit('join-room', { room: args[0], username: state.current.username });
+                        socketRef.current.emit('join-room', { room: args[0], username: state.current.username });
                     }
                     break;
                 case '/users':
                     if (!state.current.loggedIn || !state.current.currentRoom) {
                         xtermRef.current.write('Join a room first.\r\n');
                     } else {
-                        socket.emit('get-users', { room: state.current.currentRoom });
+                        socketRef.current.emit('get-users', { room: state.current.currentRoom });
                     }
                     break;
                 case '/dm':
@@ -329,7 +207,7 @@ const Terminal = () => {
                         state.current.inDM = true;
                         state.current.dmUser = targetUser;
                         xtermRef.current.write(`[DM with ${targetUser} started]\r\n`);
-                        socket.emit('get-dm-history', {
+                        socketRef.current.emit('get-dm-history', {
                             user1: state.current.username,
                             user2: targetUser
                         });
@@ -341,7 +219,7 @@ const Terminal = () => {
                         state.current.dmUser = '';
                         xtermRef.current.write('Exited DM.\r\n');
                     } else if (state.current.currentRoom) {
-                        socket.emit('leave-room', {
+                        socketRef.current.emit('leave-room', {
                             room: state.current.currentRoom,
                             username: state.current.username
                         });
@@ -362,7 +240,7 @@ const Terminal = () => {
                     if (!state.current.loggedIn) {
                         xtermRef.current.write('Not logged in.\r\n');
                     } else {
-                        socket.emit('logout');
+                        socketRef.current.emit('logout');
                         state.current.loggedIn = false;
                         state.current.username = '';
                         state.current.currentRoom = '';
@@ -378,7 +256,6 @@ const Terminal = () => {
                 default:
                     xtermRef.current.write(`Unknown command: ${command}\r\nType /help for list of commands.\r\n`);
             }
-
             if (!isAsyncCommand) {
                 writePrompt();
             }
@@ -406,6 +283,146 @@ const Terminal = () => {
             }
         }
 
+        function setupSocketListeners() {
+            const socket = socketRef.current;
+            if (!socket) return;
+
+            // Remove existing listeners to prevent duplicates
+            socket.off('room-message');
+            socket.off('dm');
+            socket.off('join-room-success');
+            socket.off('join-room-error');
+            socket.off('users-list');
+            socket.off('room-users');
+            socket.off('room-history');
+            socket.off('dm-history');
+
+            // Room messages
+            socket.on('room-message', (data) => {
+                if (data.user !== state.current.username) {
+                    if (isImageUrl(data.msg)) {
+                        xtermRef.current.write(`\r\n[${data.room}] ${data.user}: [Image] ${data.msg}\r\n`);
+                    } else {
+                        xtermRef.current.write(`\r\n[${data.room}] ${data.user}: ${data.msg}\r\n`);
+                    }
+                    writePrompt();
+                }
+            });
+
+            // Direct messages
+            socket.on('dm', (data) => {
+                if (data.to === state.current.username) {
+                    if (isImageUrl(data.msg)) {
+                        xtermRef.current.write(`\r\n[DM from ${data.from}]: [Image] ${data.msg}\r\n`);
+                    } else {
+                        xtermRef.current.write(`\r\n[DM from ${data.from}]: ${data.msg}\r\n`);
+                    }
+                    writePrompt();
+                }
+            });
+
+            // Room join events
+            socket.on('join-room-success', ({ room }) => {
+                state.current.currentRoom = room;
+                state.current.inDM = false;
+                state.current.dmUser = '';
+                xtermRef.current.write(`Joined room: ${room}\r\n`);
+                socket.emit('get-users', { room });
+                writePrompt();
+            });
+            socket.on('join-room-error', ({ msg }) => {
+                xtermRef.current.write(`Join room failed: ${msg}\r\n`);
+                writePrompt();
+            });
+
+            // Users list
+            socket.on('users-list', (users) => {
+                xtermRef.current.write(`Users in room: ${users.join(', ')}\r\n`);
+                writePrompt();
+            });
+
+            // Real-time user list updates
+            socket.on('room-users', (users) => {
+                xtermRef.current.write(`\r\n[Updated] Users in room: ${users.join(', ')}\r\n`);
+                writePrompt();
+            });
+
+            // Room history
+            socket.on('room-history', (messages) => {
+                messages.forEach(msg => {
+                    if (isImageUrl(msg.text)) {
+                        xtermRef.current.write(`[${msg.room}] ${msg.from}: [Image] ${msg.text}\r\n`);
+                    } else {
+                        xtermRef.current.write(`[${msg.room}] ${msg.from}: ${msg.text}\r\n`);
+                    }
+                });
+                writePrompt();
+            });
+
+            // DM history
+            socket.on('dm-history', (messages) => {
+                messages.forEach(msg => {
+                    const direction = msg.from === state.current.username ? 'to' : 'from';
+                    const other = direction === 'to' ? msg.to : msg.from;
+                    if (isImageUrl(msg.text)) {
+                        xtermRef.current.write(`[DM ${direction} ${other}]: [Image] ${msg.text}\r\n`);
+                    } else {
+                        xtermRef.current.write(`[DM ${direction} ${other}]: ${msg.text}\r\n`);
+                    }
+                });
+                writePrompt();
+            });
+        }
+
+        xtermRef.current.onKey(({ key, domEvent }) => {
+            if (domEvent.key === 'Enter') {
+                const promptText = getPrompt();
+                const totalLength = promptText.length + inputBuffer.length;
+                xtermRef.current.write('\r' + ' '.repeat(totalLength) + '\r');
+
+                const trimmedInput = inputBuffer.trim();
+                inputBuffer = '';
+
+                if (trimmedInput.length > 0) {
+                    if (trimmedInput.startsWith('/')) {
+                        handleCommand(trimmedInput);
+                    } else {
+                        handleMessage(trimmedInput);
+                        if (state.current.loggedIn && socketRef.current) {
+                            if (state.current.inDM) {
+                                socketRef.current.emit('dm', {
+                                    to: state.current.dmUser,
+                                    msg: trimmedInput,
+                                    from: state.current.username
+                                });
+                            } else if (state.current.currentRoom) {
+                                socketRef.current.emit('room-message', {
+                                    room: state.current.currentRoom,
+                                    msg: trimmedInput,
+                                    user: state.current.username
+                                });
+                            }
+                        }
+                        writePrompt();
+                    }
+                } else {
+                    writePrompt();
+                }
+            } else if (domEvent.key === 'Backspace') {
+                if (inputBuffer.length > 0) {
+                    inputBuffer = inputBuffer.slice(0, -1);
+                    xtermRef.current.write('\b \b');
+                }
+            } else if (
+                domEvent.key.length === 1 &&
+                !domEvent.ctrlKey &&
+                !domEvent.metaKey
+            ) {
+                inputBuffer += key;
+                xtermRef.current.write(key);
+            }
+        });
+
         const handleClick = () => xtermRef.current.focus();
         container.addEventListener('click', handleClick);
 
@@ -416,14 +433,16 @@ const Terminal = () => {
             xtermRef.current?.dispose();
             if (container) container.removeEventListener('click', handleClick);
             window.removeEventListener('resize', handleResize);
-            socket.off('room-message');
-            socket.off('dm');
-            socket.off('join-room-success');
-            socket.off('join-room-error');
-            socket.off('users-list');
-            socket.off('room-users');
-            socket.off('room-history');
-            socket.off('dm-history');
+            if (socketRef.current) {
+                socketRef.current.off('room-message');
+                socketRef.current.off('dm');
+                socketRef.current.off('join-room-success');
+                socketRef.current.off('join-room-error');
+                socketRef.current.off('users-list');
+                socketRef.current.off('room-users');
+                socketRef.current.off('room-history');
+                socketRef.current.off('dm-history');
+            }
         };
     }, []);
 
