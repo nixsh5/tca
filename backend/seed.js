@@ -1,12 +1,12 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const User = require('./models/User'); // Adjust path if needed
+const User = require('./models/User');
 
 const users = [
-    { username: 'nexor1230', password: 'sc98123', role: 'user' },
-    { username: 'trial', password: 'trial', role: 'user' },
-    // Add more users here as needed
+    { username: 'abc', password: 'pass1'},
+    { username: 'xyz', password: 'pass2'},
+    // users can be added with username and passwords
 ];
 
 async function seed() {

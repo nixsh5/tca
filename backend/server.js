@@ -32,7 +32,7 @@ app.get('/', (req, res) => {
     res.send('Backend is running');
 });
 
-// --- Authentication Route ---
+//  Authentication Route 
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -81,7 +81,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// --- Media Upload Route ---
+//  Media Upload Route 
 app.post('/api/upload', upload.single('image'), async (req, res) => {
     try {
         const result = await cloudinary.uploader.upload(req.file.path, {
@@ -94,13 +94,13 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     }
 });
 
-// --- List all rooms (for /listrooms command) ---
+//  List all rooms (for /listrooms command) 
 app.get('/api/rooms', async (req, res) => {
     const rooms = await Room.find({}, 'name');
     res.json(rooms.map(r => r.name));
 });
 
-// --- MongoDB connection ---
+//  MongoDB connection 
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -108,7 +108,7 @@ mongoose.connect(process.env.MONGODB_URI, {
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// --- Socket.io setup ---
+//  Socket.io setup 
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
@@ -117,7 +117,7 @@ const io = new Server(server, {
     }
 });
 
-// --- JWT Middleware: Now correctly placed after io is initialized ---
+// JWT token Middleware
 io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
@@ -130,11 +130,11 @@ io.use((socket, next) => {
     });
 });
 
-// --- Socket.io connection handler ---
+// Socket.io connection handler
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
-    // --- Logout ---
+    //  Logout 
     socket.on('logout', () => {
         if (userSockets[socket.id]) {
             const { room, username } = userSockets[socket.id];
@@ -146,7 +146,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- Join room with access control, user mapping, and history ---
+    //  Join room with access control, user mapping, and history 
     socket.on('join-room', async ({ room, username }) => {
         const roomDoc = await Room.findOne({ name: room });
         if (!roomDoc) {
@@ -173,7 +173,7 @@ io.on('connection', (socket) => {
         io.to(room).emit('room-users', getUsersInRoom(room));
     });
 
-    // --- Leave room ---
+    //  Leave room 
     socket.on('leave-room', ({ room, username }) => {
         if (userSockets[socket.id] && userSockets[socket.id].room === room) {
             socket.leave(room);
@@ -182,7 +182,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- Room message ---
+    //  Room message 
     socket.on('room-message', async (data) => {
         // data: { room, msg, user }
         if (userSockets[socket.id]?.room === data.room) {
@@ -195,7 +195,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- Direct message (DM) ---
+    //  Direct message (DM) 
     socket.on('dm', async (data) => {
         // data: { to, from, msg }
         const targetSocketId = usernameToSocket[data.to];
@@ -212,7 +212,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- DM history ---
+    //  DM history 
     socket.on('get-dm-history', async ({ user1, user2 }) => {
         const history = await Message.find({
             $or: [
@@ -223,19 +223,19 @@ io.on('connection', (socket) => {
         socket.emit('dm-history', history);
     });
 
-    // --- List users in room ---
+    //  List users in room 
     socket.on('get-users', ({ room }) => {
         socket.emit('users-list', getUsersInRoom(room));
     });
 
-    // --- Helper: get users in a room ---
+    //  Helper: get users in a room 
     function getUsersInRoom(room) {
         return Object.values(userSockets)
             .filter(u => u.room === room)
             .map(u => u.username);
     }
 
-    // --- Handle disconnect ---
+    //  Handling  disconnect
     socket.on('disconnect', () => {
         const user = userSockets[socket.id];
         if (user && user.room) {
@@ -246,14 +246,14 @@ io.on('connection', (socket) => {
         console.log('User disconnected:', socket.id);
     });
 
-    // --- Example: Listen for a test event ---
+    //  Example(trial): Listen to test event
     socket.on('test', (msg) => {
         console.log('Test event received:', msg);
         socket.emit('test-reply', 'Hello from backend!');
     });
 });
 
-// --- Start server ---
+//  Starting server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
