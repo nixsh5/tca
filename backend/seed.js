@@ -4,9 +4,8 @@ const bcrypt = require('bcryptjs');
 const User = require('./models/User'); // Adjust path if needed
 
 const users = [
-    { username: 'test', password: '123', role: 'user' },
-    { username: 'test2', password: '123', role: 'user' },
-    { username: 'test3', password: '123', role: 'user' },
+    { username: 'nexor1230', password: 'sc98123', role: 'user' },
+    { username: 'trial', password: 'trial', role: 'user' },
     // Add more users here as needed
 ];
 
