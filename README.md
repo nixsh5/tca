@@ -174,3 +174,6 @@ Make sure to maintain consistent coding style and test new features.
 - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)  
 - [Vercel](https://vercel.com/)  
 - [Render](https://render.com/)  
+
+
+*Made with ❤️ by Nish Deshmukh*
